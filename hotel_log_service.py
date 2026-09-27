@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
@@ -22,7 +23,10 @@ class HotelLogService:
 
     def _connect(self):
         try:
-            creds_dict = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "{}"))
+            raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+            if not raw.startswith("{"):
+                raw = base64.b64decode(raw).decode("utf-8")
+            creds_dict = json.loads(raw)
             creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
             client = gspread.authorize(creds)
             self.sheet = client.open_by_key(os.environ.get("HOTEL_LOG_SHEET_ID", ""))
