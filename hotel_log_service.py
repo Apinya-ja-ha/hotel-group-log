@@ -38,19 +38,24 @@ class HotelLogService:
     def _ensure_worksheets(self):
         existing = [ws.title for ws in self.sheet.worksheets()]
         if "AllMessages" not in existing:
-            ws = self.sheet.add_worksheet("AllMessages", rows=2000, cols=6)
-            ws.append_row(["Timestamp", "UserID", "Name", "Type", "Content", "Important"])
+            ws = self.sheet.add_worksheet("AllMessages", rows=2000, cols=7)
+            ws.append_row(["Timestamp", "UserID", "Name", "Type", "Content", "Important", "Description"])
+        else:
+            ws = self.sheet.worksheet("AllMessages")
+            headers = ws.row_values(1)
+            if len(headers) < 7:
+                ws.update_cell(1, 7, "Description")
         if "Important" not in existing:
             ws = self.sheet.add_worksheet("Important", rows=500, cols=6)
             ws.append_row(["Timestamp", "UserID", "Name", "Type", "Content", "Note"])
         self.all_ws = self.sheet.worksheet("AllMessages")
         self.important_ws = self.sheet.worksheet("Important")
 
-    def log_message(self, user_id: str, display_name: str, msg_type: str, content: str, important: bool):
+    def log_message(self, user_id: str, display_name: str, msg_type: str, content: str, important: bool, description: str = ""):
         if not self.all_ws:
             return
         now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
-        row = [now, user_id, display_name, msg_type, content, "⭐" if important else ""]
+        row = [now, user_id, display_name, msg_type, content, "⭐" if important else "", description]
         try:
             self.all_ws.append_row(row)
             if important:
@@ -83,8 +88,8 @@ class HotelLogService:
 
     def ocr_image(self, image_bytes: bytes) -> str:
         try:
-            import base64
-            b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+            import base64 as _b64
+            b64 = _b64.standard_b64encode(image_bytes).decode("utf-8")
             client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
             resp = client.messages.create(
                 model="claude-haiku-4-5-20251001",
@@ -97,9 +102,9 @@ class HotelLogService:
                     ],
                 }],
             )
-            return f"📷 {resp.content[0].text.strip()}"
+            return resp.content[0].text.strip()
         except Exception as e:
-            return f"📷 รูปภาพ (OCR error: {e})"
+            return f"(OCR error: {e})"
 
     def get_today_summary(self) -> str:
         if not self.all_ws:

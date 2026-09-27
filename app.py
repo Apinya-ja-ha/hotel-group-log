@@ -130,10 +130,10 @@ def handle_image(event):
     try:
         content_stream = line_bot_api.get_message_content(event.message.id)
         image_bytes = b"".join(chunk for chunk in content_stream.iter_content())
-        content = hotel_service.ocr_image(image_bytes)
+        description = hotel_service.ocr_image(image_bytes)
     except Exception:
-        content = "📷 รูปภาพ"
-    hotel_service.log_message(user_id, display_name, "image", content, False)
+        description = ""
+    hotel_service.log_message(user_id, display_name, "image", "📷 รูปภาพ", False, description)
 
 
 # Auto-purge AllMessages sheet every day at 02:00
