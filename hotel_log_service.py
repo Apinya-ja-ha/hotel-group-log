@@ -44,6 +44,7 @@ class HotelLogService:
             ws = self.sheet.worksheet("AllMessages")
             headers = ws.row_values(1)
             if len(headers) < 7:
+                ws.resize(cols=7)
                 ws.update_cell(1, 7, "Description")
         if "Important" not in existing:
             ws = self.sheet.add_worksheet("Important", rows=500, cols=6)
