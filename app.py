@@ -127,7 +127,13 @@ def handle_image(event):
     if user_id == BOT_USER_ID:
         return
     display_name = _get_display_name(event, user_id)
-    hotel_service.log_message(user_id, display_name, "image", "📷 รูปภาพ", False)
+    try:
+        content_stream = line_bot_api.get_message_content(event.message.id)
+        image_bytes = b"".join(chunk for chunk in content_stream.iter_content())
+        content = hotel_service.ocr_image(image_bytes)
+    except Exception:
+        content = "📷 รูปภาพ"
+    hotel_service.log_message(user_id, display_name, "image", content, False)
 
 
 # Auto-purge AllMessages sheet every day at 02:00

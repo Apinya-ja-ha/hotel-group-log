@@ -81,6 +81,26 @@ class HotelLogService:
         except Exception as e:
             print(f"[ERROR] purge: {e}")
 
+    def ocr_image(self, image_bytes: bytes) -> str:
+        try:
+            import base64
+            b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+            client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+            resp = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=300,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
+                        {"type": "text", "text": "ถอดข้อความในภาพ ถ้าไม่มีข้อความให้อธิบายภาพสั้นๆ 1-2 ประโยค"},
+                    ],
+                }],
+            )
+            return f"📷 {resp.content[0].text.strip()}"
+        except Exception as e:
+            return f"📷 รูปภาพ (OCR error: {e})"
+
     def get_today_summary(self) -> str:
         if not self.all_ws:
             return "❌ เชื่อมต่อ Sheets ไม่ได้"
