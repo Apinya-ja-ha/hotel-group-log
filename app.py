@@ -1,8 +1,11 @@
 import os
+import re
+import requests
+from bs4 import BeautifulSoup
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, ImageMessage, TextSendMessage
+from linebot.models import MessageEvent, TextMessage, ImageMessage, VideoMessage, TextSendMessage
 from hotel_log_service import HotelLogService
 from apscheduler.schedulers.background import BackgroundScheduler
 import pytz
@@ -20,6 +23,22 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 hotel_service = HotelLogService()
 
 IMPORTANT_KEYWORDS = ["แอดมิน", "admin", "@admin", "ด่วน", "urgent", "สำคัญ"]
+URL_RE = re.compile(r'https?://\S+')
+
+
+def _fetch_link_title(url: str) -> str:
+    try:
+        resp = requests.get(url, timeout=5, headers={"User-Agent": "Mozilla/5.0"}, allow_redirects=True)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        title = (
+            (soup.find("meta", property="og:title") or {}).get("content")
+            or (soup.find("title") and soup.find("title").get_text())
+            or ""
+        )
+        title = title.strip()[:120]
+        return f"🔗 {title} — {url}" if title else f"🔗 {url}"
+    except Exception:
+        return f"🔗 {url}"
 
 
 def _is_important(text: str, bot_mentioned: bool) -> bool:
@@ -82,8 +101,24 @@ def handle_text(event):
         return
 
     display_name = _get_display_name(event, user_id)
+    urls = URL_RE.findall(text)
+    if urls:
+        content = _fetch_link_title(urls[0])
+        msg_type = "link"
+    else:
+        content = text
+        msg_type = "text"
     important = _is_important(text, bot_mentioned)
-    hotel_service.log_message(user_id, display_name, "text", text, important)
+    hotel_service.log_message(user_id, display_name, msg_type, content, important)
+
+
+@handler.add(MessageEvent, message=VideoMessage)
+def handle_video(event):
+    user_id = event.source.user_id
+    if user_id == BOT_USER_ID:
+        return
+    display_name = _get_display_name(event, user_id)
+    hotel_service.log_message(user_id, display_name, "video", "🎬 วิดีโอ", False)
 
 
 @handler.add(MessageEvent, message=ImageMessage)
