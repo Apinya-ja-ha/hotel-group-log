@@ -2,6 +2,7 @@ import os
 import re
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -16,6 +17,7 @@ LINE_CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "")
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
 ADMIN_USER_IDS = set(filter(None, os.environ.get("ADMIN_USER_IDS", "").split(",")))
 BOT_USER_ID = os.environ.get("BOT_USER_ID", "")
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
 TZ = pytz.timezone("Asia/Bangkok")
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
@@ -24,6 +26,16 @@ hotel_service = HotelLogService()
 
 IMPORTANT_KEYWORDS = ["แอดมิน", "admin", "@admin", "ด่วน", "urgent", "สำคัญ"]
 URL_RE = re.compile(r'https?://\S+')
+
+HELP_TEXT = (
+    "📌 คำสั่งแอดมิน:\n"
+    "/สรุป — สรุปกิจกรรมวันนี้ (AI)\n"
+    "/กะนี้ — รายงานกะปัจจุบัน\n"
+    "/ห้องพร้อม — ห้องพร้อมกะนี้\n"
+    "/ยอด — ยอดเงินกะนี้\n"
+    "/ซ่อม — บันทึกซ่อมบำรุง\n"
+    "/help — แสดงคำสั่งทั้งหมด"
+)
 
 
 def _fetch_link_title(url: str) -> str:
@@ -61,6 +73,32 @@ def _get_display_name(event, user_id: str) -> str:
         return f"User-{user_id[-6:]}"
 
 
+def _push_to_admins(text: str):
+    for admin_id in ADMIN_USER_IDS:
+        try:
+            line_bot_api.push_message(admin_id, TextSendMessage(text=text))
+        except Exception as e:
+            print(f"[ERROR] push to {admin_id}: {e}")
+
+
+def _morning_report():
+    """08:00 — report on กะดึก that just ended (17:00 yesterday → 08:00 now)."""
+    now = datetime.now(TZ)
+    end = now.replace(hour=8, minute=0, second=0, microsecond=0)
+    start = (now - timedelta(days=1)).replace(hour=17, minute=0, second=0, microsecond=0)
+    text = hotel_service.get_shift_summary_text(start, end, "กะดึก 🌙")
+    _push_to_admins(f"🔔 รายงานอัตโนมัติ\n{text}")
+
+
+def _evening_report():
+    """17:00 — report on กะเช้า that just ended (08:00 → 17:00 today)."""
+    now = datetime.now(TZ)
+    end = now.replace(hour=17, minute=0, second=0, microsecond=0)
+    start = now.replace(hour=8, minute=0, second=0, microsecond=0)
+    text = hotel_service.get_shift_summary_text(start, end, "กะเช้า ☀️")
+    _push_to_admins(f"🔔 รายงานอัตโนมัติ\n{text}")
+
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     signature = request.headers.get("X-Line-Signature", "")
@@ -77,6 +115,18 @@ def health():
     return "Hotel Group Log — OK"
 
 
+@app.route("/admin/setup-richmenu/<secret>")
+def setup_richmenu(secret):
+    if not CRON_SECRET or secret != CRON_SECRET:
+        abort(403)
+    try:
+        from rich_menu import create_and_set_richmenu
+        result = create_and_set_richmenu(LINE_CHANNEL_ACCESS_TOKEN)
+        return result
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text(event):
     user_id = event.source.user_id
@@ -84,6 +134,7 @@ def handle_text(event):
         return
 
     text = event.message.text.strip()
+    is_admin = user_id in ADMIN_USER_IDS
 
     # Detect if bot was @mentioned
     bot_mentioned = False
@@ -93,13 +144,52 @@ def handle_text(event):
                 bot_mentioned = True
                 break
 
-    # /สรุป command — admin only
+    # --- Admin commands ---
     if text.startswith("/สรุป"):
-        if user_id in ADMIN_USER_IDS:
+        if is_admin:
             summary = hotel_service.get_today_summary()
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=summary))
         return
 
+    if text.startswith("/กะนี้"):
+        if is_admin:
+            start, end, name = hotel_service.get_shift_bounds()
+            summary = hotel_service.get_shift_summary_text(start, end, name)
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=summary))
+        return
+
+    if text.startswith("/ห้องพร้อม"):
+        if is_admin:
+            start, end, name = hotel_service.get_shift_bounds()
+            summary = hotel_service.get_shift_summary_text(start, end, name)
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=summary))
+        return
+
+    if text.startswith("/ยอด"):
+        if is_admin:
+            start, end, name = hotel_service.get_shift_bounds()
+            summary = hotel_service.get_shift_summary_text(start, end, name)
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=summary))
+        return
+
+    if text.startswith("/ซ่อม"):
+        if is_admin:
+            reply = (
+                "🔧 บันทึกซ่อม/บำรุง\n"
+                "พิมพ์รายละเอียดในกลุ่มโรงแรม\n"
+                "ระบบจะบันทึกไว้ให้อัตโนมัติ\n\n"
+                "ตัวอย่าง:\n"
+                "ห้อง 101 เปลี่ยนหลอดไฟ\n"
+                "ห้อง 203 ล้างแอร์"
+            )
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+        return
+
+    if text.startswith("/help"):
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=HELP_TEXT))
+        return
+
+    # --- Log normal messages ---
     display_name = _get_display_name(event, user_id)
     urls = URL_RE.findall(text)
     if urls:
@@ -138,9 +228,11 @@ def handle_image(event):
     hotel_service.log_message(user_id, display_name, "image", "📷 รูปภาพ", False, description, category)
 
 
-# Auto-purge AllMessages sheet every day at 02:00
+# Scheduled jobs (Bangkok timezone)
 scheduler = BackgroundScheduler(timezone=TZ)
 scheduler.add_job(hotel_service.purge_old_messages, "cron", hour=2, minute=0)
+scheduler.add_job(_morning_report, "cron", hour=8, minute=0)
+scheduler.add_job(_evening_report, "cron", hour=17, minute=0)
 scheduler.start()
 
 if __name__ == "__main__":

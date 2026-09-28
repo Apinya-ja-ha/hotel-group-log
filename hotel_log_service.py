@@ -132,6 +132,68 @@ class HotelLogService:
         except Exception as e:
             return f"(OCR error: {e})"
 
+    def get_shift_bounds(self) -> tuple:
+        """Returns (shift_start, shift_end, shift_name) for current Bangkok shift."""
+        now = datetime.now(TZ)
+        h = now.hour
+        if 8 <= h < 17:
+            start = now.replace(hour=8, minute=0, second=0, microsecond=0)
+            end = now.replace(hour=17, minute=0, second=0, microsecond=0)
+            name = "กะเช้า ☀️"
+        elif h >= 17:
+            start = now.replace(hour=17, minute=0, second=0, microsecond=0)
+            end = (now + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+            name = "กะดึก 🌙"
+        else:
+            start = (now - timedelta(days=1)).replace(hour=17, minute=0, second=0, microsecond=0)
+            end = now.replace(hour=8, minute=0, second=0, microsecond=0)
+            name = "กะดึก 🌙"
+        return start, end, name
+
+    def _count_cat(self, rows: list, category: str) -> int:
+        return sum(1 for r in rows if len(r) > 7 and r[7] == category)
+
+    def get_shift_summary_text(self, shift_start: datetime, shift_end: datetime, shift_name: str) -> str:
+        if not self.all_ws:
+            return "❌ เชื่อมต่อ Sheets ไม่ได้"
+        try:
+            all_rows = self.all_ws.get_all_values()
+            shift_rows = []
+            for r in all_rows[1:]:
+                if not r[0]:
+                    continue
+                try:
+                    ts = datetime.strptime(r[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=TZ)
+                    if shift_start <= ts < shift_end:
+                        shift_rows.append(r)
+                except ValueError:
+                    continue
+
+            date_str = shift_start.strftime("%d/%m/%Y")
+            overnight = self._count_cat(shift_rows, "check-in ค้างคืน")
+            temp = self._count_cat(shift_rows, "check-in ชั่วคราว")
+            gen_ci = self._count_cat(shift_rows, "check-in")
+            checkout = self._count_cat(shift_rows, "check-out")
+            room_ready = self._count_cat(shift_rows, "ห้องพร้อม")
+
+            lines = [
+                f"📋 {shift_name} — {date_str}",
+                f"{'━' * 16}",
+                f"🏨 check-in ค้างคืน: {overnight} ห้อง",
+                f"⏰ check-in ชั่วคราว: {temp} ห้อง",
+            ]
+            if gen_ci > 0:
+                lines.append(f"🔑 check-in (อื่นๆ): {gen_ci} ห้อง")
+            lines += [
+                f"🚪 check-out: {checkout} ห้อง",
+                f"✅ ห้องพร้อม: {room_ready} ห้อง",
+                f"{'━' * 16}",
+                f"📨 รวมข้อความ: {len(shift_rows)} รายการ",
+            ]
+            return "\n".join(lines)
+        except Exception as e:
+            return f"❌ สรุปกะไม่ได้: {e}"
+
     def get_today_summary(self) -> str:
         if not self.all_ws:
             return "❌ เชื่อมต่อ Sheets ไม่ได้"
