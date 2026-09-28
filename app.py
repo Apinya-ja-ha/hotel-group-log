@@ -109,7 +109,8 @@ def handle_text(event):
         content = text
         msg_type = "text"
     important = _is_important(text, bot_mentioned)
-    hotel_service.log_message(user_id, display_name, msg_type, content, important)
+    category = hotel_service.classify(text, msg_type)
+    hotel_service.log_message(user_id, display_name, msg_type, content, important, category=category)
 
 
 @handler.add(MessageEvent, message=VideoMessage)
@@ -118,7 +119,7 @@ def handle_video(event):
     if user_id == BOT_USER_ID:
         return
     display_name = _get_display_name(event, user_id)
-    hotel_service.log_message(user_id, display_name, "video", "🎬 วิดีโอ", False)
+    hotel_service.log_message(user_id, display_name, "video", "🎬 วิดีโอ", False, category="วิดีโอ")
 
 
 @handler.add(MessageEvent, message=ImageMessage)
@@ -133,7 +134,8 @@ def handle_image(event):
         description = hotel_service.ocr_image(image_bytes)
     except Exception:
         description = ""
-    hotel_service.log_message(user_id, display_name, "image", "📷 รูปภาพ", False, description)
+    category = hotel_service.classify(description, "image")
+    hotel_service.log_message(user_id, display_name, "image", "📷 รูปภาพ", False, description, category)
 
 
 # Auto-purge AllMessages sheet every day at 02:00

@@ -38,25 +38,50 @@ class HotelLogService:
     def _ensure_worksheets(self):
         existing = [ws.title for ws in self.sheet.worksheets()]
         if "AllMessages" not in existing:
-            ws = self.sheet.add_worksheet("AllMessages", rows=2000, cols=7)
-            ws.append_row(["Timestamp", "UserID", "Name", "Type", "Content", "Important", "Description"])
+            ws = self.sheet.add_worksheet("AllMessages", rows=2000, cols=8)
+            ws.append_row(["Timestamp", "UserID", "Name", "Type", "Content", "Important", "Description", "Category"])
         else:
             ws = self.sheet.worksheet("AllMessages")
             headers = ws.row_values(1)
             if len(headers) < 7:
-                ws.resize(cols=7)
+                ws.resize(cols=8)
                 ws.update_cell(1, 7, "Description")
+                ws.update_cell(1, 8, "Category")
+            elif len(headers) < 8:
+                ws.resize(cols=8)
+                ws.update_cell(1, 8, "Category")
         if "Important" not in existing:
             ws = self.sheet.add_worksheet("Important", rows=500, cols=6)
             ws.append_row(["Timestamp", "UserID", "Name", "Type", "Content", "Note"])
         self.all_ws = self.sheet.worksheet("AllMessages")
         self.important_ws = self.sheet.worksheet("Important")
 
-    def log_message(self, user_id: str, display_name: str, msg_type: str, content: str, important: bool, description: str = ""):
+    @staticmethod
+    def classify(text: str, msg_type: str) -> str:
+        if msg_type == "link":
+            return "ลิงค์"
+        if msg_type == "video":
+            return "วิดีโอ"
+        if msg_type == "image":
+            return "รูปภาพ"
+        t = text.lower()
+        if "✅" in text:
+            return "ห้องพร้อม"
+        if any(w in t for w in ["check out", "checkout", "เช็คเอ้า", "เช็คเอาท์"]):
+            return "check-out"
+        if "ค้างคืน" in t:
+            return "check-in ค้างคืน"
+        if "ชั่วคราว" in t:
+            return "check-in ชั่วคราว"
+        if any(w in t for w in ["check in", "checkin", "เช็คอิน"]):
+            return "check-in"
+        return "ทั่วไป"
+
+    def log_message(self, user_id: str, display_name: str, msg_type: str, content: str, important: bool, description: str = "", category: str = ""):
         if not self.all_ws:
             return
         now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
-        row = [now, user_id, display_name, msg_type, content, "⭐" if important else "", description]
+        row = [now, user_id, display_name, msg_type, content, "⭐" if important else "", description, category]
         try:
             self.all_ws.append_row(row)
             if important:
