@@ -99,7 +99,7 @@ class HotelLogService:
                     "role": "user",
                     "content": [
                         {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
-                        {"type": "text", "text": "ถอดข้อความในภาพ ถ้าไม่มีข้อความให้อธิบายภาพสั้นๆ 1-2 ประโยค"},
+                        {"type": "text", "text": "ถอดข้อความในภาพทุกตัวอักษร ถ้าไม่มีข้อความให้อธิบายภาพสั้นๆ 1 ประโยค ตอบเป็น plain text ห้ามใช้ markdown"},
                     ],
                 }],
             )
