@@ -79,6 +79,8 @@ class HotelLogService:
             return "ซ่อมบำรุง"
         if "ย้ายห้อง" in t or ("ย้ายไป" in t and "ห้อง" in t) or "โอนห้อง" in t:
             return "ย้ายห้อง"
+        if any(w in t for w in ["มิเตอร์น้ำ", "มิเตอร์", "เลขน้ำ", "water meter"]):
+            return "มิเตอร์น้ำ"
         return "ทั่วไป"
 
     def log_message(self, user_id: str, display_name: str, msg_type: str, content: str, important: bool, description: str = "", category: str = ""):
@@ -273,6 +275,83 @@ class HotelLogService:
                 "total_checkout": categories.get("check-out", 0),
                 "total_room_ready": categories.get("ห้องพร้อม", 0),
                 "total_messages": sum(v["total"] for v in daily.values()),
+            },
+        }
+
+    def get_water_data(self, start_date: str, end_date: str) -> dict:
+        """Return water meter readings and daily consumption from Sheets."""
+        import re as _re
+        NUM_RE = _re.compile(r'(\d{3,}(?:[.,]\d+)?)')
+        if not self.all_ws:
+            return {}
+        try:
+            start = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=TZ)
+            end = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=TZ) + timedelta(days=1)
+        except ValueError:
+            return {}
+        try:
+            all_rows = self.all_ws.get_all_values()
+        except Exception:
+            return {}
+
+        readings = []
+        for r in all_rows[1:]:
+            if not r[0]:
+                continue
+            cat = r[7] if len(r) > 7 else ""
+            if cat != "มิเตอร์น้ำ":
+                continue
+            try:
+                ts = datetime.strptime(r[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=TZ)
+            except ValueError:
+                continue
+            if ts < start or ts >= end:
+                continue
+            content = r[4] if len(r) > 4 else ""
+            desc = r[6] if len(r) > 6 else ""
+            nums = NUM_RE.findall(f"{content} {desc}")
+            if not nums:
+                continue
+            val = max(float(n.replace(",", ".")) for n in nums)
+            readings.append({
+                "ts": ts.isoformat(),
+                "date": ts.strftime("%Y-%m-%d"),
+                "time": ts.strftime("%H:%M"),
+                "value": val,
+                "user": r[2] if len(r) > 2 else "",
+                "note": content[:80],
+            })
+
+        readings.sort(key=lambda x: x["ts"])
+
+        # Daily: last reading per day, compute consumption
+        by_date: dict = {}
+        for rd in readings:
+            by_date[rd["date"]] = rd
+        dates_sorted = sorted(by_date.keys())
+        daily = []
+        prev_val = None
+        for d in dates_sorted:
+            rd = by_date[d]
+            consumption = round(rd["value"] - prev_val, 2) if prev_val is not None else None
+            daily.append({
+                "date": d,
+                "reading": rd["value"],
+                "consumption": consumption,
+                "time": rd["time"],
+                "user": rd["user"],
+                "note": rd["note"],
+            })
+            prev_val = rd["value"]
+
+        total_consumption = round(daily[-1]["reading"] - daily[0]["reading"], 2) if len(daily) >= 2 else None
+        return {
+            "readings": readings,
+            "daily": daily,
+            "summary": {
+                "count": len(readings),
+                "latest": daily[-1]["reading"] if daily else None,
+                "total_consumption": total_consumption,
             },
         }
 

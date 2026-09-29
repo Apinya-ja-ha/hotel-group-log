@@ -123,6 +123,11 @@ h1{font-size:1.05rem;font-weight:700;margin:0 0 12px;letter-spacing:.02em}
 </head>
 <body>
 <h1>🏨 บ้านเพื่อนรีสอร์ท — แผนที่ห้องพัก</h1>
+<div style="display:flex;align-items:center;gap:8px;background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.3);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:.78rem">
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;flex-shrink:0;animation:blink 1.5s infinite"></span>
+  <span>เริ่มเก็บข้อมูลจริงตั้งแต่ <strong>30 ก.ย. 2569</strong> — ข้อมูลก่อนหน้านั้นอาจไม่สมบูรณ์</span>
+</div>
+<style>@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}</style>
 
 <div class="quick-btns">
   <button class="qbtn" onclick="setRange(1)">วันนี้</button>

@@ -137,6 +137,28 @@ def api_data():
     return data
 
 
+@app.route("/water")
+def water():
+    key = request.args.get("key", "")
+    if not CRON_SECRET or key != CRON_SECRET:
+        abort(403)
+    from water_page import WATER_HTML
+    return WATER_HTML
+
+
+@app.route("/api/water")
+def api_water():
+    key = request.args.get("key", "")
+    if not CRON_SECRET or key != CRON_SECRET:
+        abort(403)
+    start = request.args.get("start", "")
+    end = request.args.get("end", "")
+    if not start or not end:
+        return {"error": "missing start/end"}, 400
+    data = hotel_service.get_water_data(start, end)
+    return data
+
+
 @app.route("/roommap")
 def roommap():
     key = request.args.get("key", "")
