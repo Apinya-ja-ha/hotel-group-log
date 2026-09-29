@@ -75,6 +75,10 @@ class HotelLogService:
             return "check-in ชั่วคราว"
         if any(w in t for w in ["check in", "checkin", "เช็คอิน"]):
             return "check-in"
+        if any(w in t for w in ["ซ่อม", "ซ่อมแซม", "บำรุง"]) or ("เปลี่ยน" in t and "ห้อง" in t):
+            return "ซ่อมบำรุง"
+        if "ย้ายห้อง" in t or ("ย้ายไป" in t and "ห้อง" in t) or "โอนห้อง" in t:
+            return "ย้ายห้อง"
         return "ทั่วไป"
 
     def log_message(self, user_id: str, display_name: str, msg_type: str, content: str, important: bool, description: str = "", category: str = ""):
@@ -269,6 +273,86 @@ class HotelLogService:
                 "total_checkout": categories.get("check-out", 0),
                 "total_room_ready": categories.get("ห้องพร้อม", 0),
                 "total_messages": sum(v["total"] for v in daily.values()),
+            },
+        }
+
+    def get_roommap_data(self, start_date: str, end_date: str) -> dict:
+        """Return per-room activity, maintenance, transfers, and financial estimates."""
+        import re as _re
+        ROOM_RE = _re.compile(r'ห้อง\s*(\d{3})')
+        XFER_RE = _re.compile(r'ห้อง\s*(\d{3}).{0,20}(?:ย้ายไป|ไป|→)\s*ห้อง\s*(\d{3})')
+        if not self.all_ws:
+            return {}
+        try:
+            start = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=TZ)
+            end = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=TZ) + timedelta(days=1)
+        except ValueError:
+            return {}
+        try:
+            all_rows = self.all_ws.get_all_values()
+        except Exception:
+            return {}
+
+        rooms: dict = {}
+        maint: dict = {}
+        xfers: list = []
+        total_ov = total_tp = 0
+
+        for r in all_rows[1:]:
+            if not r[0]:
+                continue
+            try:
+                ts = datetime.strptime(r[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=TZ)
+            except ValueError:
+                continue
+            if ts < start or ts >= end:
+                continue
+
+            cat = r[7] if len(r) > 7 else ""
+            content = r[4] if len(r) > 4 else ""
+            desc = r[6] if len(r) > 6 else ""
+            text = f"{content} {desc}"
+            date_str = ts.strftime("%d/%m")
+            time_str = ts.strftime("%H:%M")
+
+            m = ROOM_RE.search(text)
+            room = m.group(1) if m else None
+
+            if room:
+                if room not in rooms:
+                    rooms[room] = {"ov": 0, "tp": 0, "rd": 0, "co": 0}
+                if cat == "check-in ค้างคืน":
+                    rooms[room]["ov"] += 1
+                    total_ov += 1
+                elif cat == "check-in ชั่วคราว":
+                    rooms[room]["tp"] += 1
+                    total_tp += 1
+                elif cat == "ห้องพร้อม":
+                    rooms[room]["rd"] += 1
+                elif cat == "check-out":
+                    rooms[room]["co"] += 1
+                elif cat == "ซ่อมบำรุง":
+                    if room not in maint:
+                        maint[room] = []
+                    maint[room].append({"date": date_str, "note": content[:80]})
+
+            if cat == "ย้ายห้อง":
+                xm = XFER_RE.search(text)
+                if xm:
+                    xfers.append({
+                        "date": date_str, "time": time_str,
+                        "from": xm.group(1), "to": xm.group(2),
+                        "note": content[:50]
+                    })
+
+        return {
+            "rooms": rooms,
+            "maint": maint,
+            "xfers": xfers[-30:],
+            "finance": {
+                "calc": total_ov * 500 + total_tp * 180,
+                "ocr": None,
+                "shop": None,
             },
         }
 

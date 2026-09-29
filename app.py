@@ -137,6 +137,28 @@ def api_data():
     return data
 
 
+@app.route("/roommap")
+def roommap():
+    key = request.args.get("key", "")
+    if not CRON_SECRET or key != CRON_SECRET:
+        abort(403)
+    from roommap_page import ROOMMAP_HTML
+    return ROOMMAP_HTML
+
+
+@app.route("/api/roommap")
+def api_roommap():
+    key = request.args.get("key", "")
+    if not CRON_SECRET or key != CRON_SECRET:
+        abort(403)
+    start = request.args.get("start", "")
+    end = request.args.get("end", "")
+    if not start or not end:
+        return {"error": "missing start/end"}, 400
+    data = hotel_service.get_roommap_data(start, end)
+    return data
+
+
 @app.route("/admin/setup-richmenu/<secret>")
 def setup_richmenu(secret):
     if not CRON_SECRET or secret != CRON_SECRET:
