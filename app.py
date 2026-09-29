@@ -115,6 +115,28 @@ def health():
     return "Hotel Group Log — OK"
 
 
+@app.route("/dashboard")
+def dashboard():
+    key = request.args.get("key", "")
+    if not CRON_SECRET or key != CRON_SECRET:
+        abort(403)
+    from dashboard_page import DASHBOARD_HTML
+    return DASHBOARD_HTML
+
+
+@app.route("/api/data")
+def api_data():
+    key = request.args.get("key", "")
+    if not CRON_SECRET or key != CRON_SECRET:
+        abort(403)
+    start = request.args.get("start", "")
+    end = request.args.get("end", "")
+    if not start or not end:
+        return {"error": "missing start/end"}, 400
+    data = hotel_service.get_dashboard_data(start, end)
+    return data
+
+
 @app.route("/admin/setup-richmenu/<secret>")
 def setup_richmenu(secret):
     if not CRON_SECRET or secret != CRON_SECRET:

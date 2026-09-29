@@ -194,6 +194,84 @@ class HotelLogService:
         except Exception as e:
             return f"❌ สรุปกะไม่ได้: {e}"
 
+    def get_dashboard_data(self, start_date: str, end_date: str) -> dict:
+        """Aggregate data for dashboard. start/end = 'YYYY-MM-DD' Bangkok time."""
+        import re as _re
+        ROOM_RE = _re.compile(r'(?:ห้อง\s*)?(\b\d{3}\b)')
+        if not self.all_ws:
+            return {}
+        try:
+            start = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=TZ)
+            end = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=TZ) + timedelta(days=1)
+        except ValueError:
+            return {}
+        try:
+            all_rows = self.all_ws.get_all_values()
+        except Exception:
+            return {}
+
+        daily: dict = {}
+        hourly = [0] * 24
+        categories: dict = {}
+        rooms: dict = {}
+
+        for r in all_rows[1:]:
+            if not r[0]:
+                continue
+            try:
+                ts = datetime.strptime(r[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=TZ)
+            except ValueError:
+                continue
+            if ts < start or ts >= end:
+                continue
+
+            date_str = ts.strftime("%Y-%m-%d")
+            cat = r[7] if len(r) > 7 else ""
+            content = r[4] if len(r) > 4 else ""
+            desc = r[6] if len(r) > 6 else ""
+
+            if date_str not in daily:
+                daily[date_str] = {
+                    "check-in ค้างคืน": 0, "check-in ชั่วคราว": 0,
+                    "check-in": 0, "check-out": 0, "ห้องพร้อม": 0, "total": 0,
+                }
+            daily[date_str]["total"] += 1
+            if cat in daily[date_str]:
+                daily[date_str][cat] += 1
+
+            hourly[ts.hour] += 1
+
+            if cat:
+                categories[cat] = categories.get(cat, 0) + 1
+
+            m = ROOM_RE.search(f"{content} {desc}")
+            if m:
+                room = m.group(1)
+                rooms[room] = rooms.get(room, 0) + 1
+
+        daily_list = sorted(
+            [{"date": d, **v} for d, v in daily.items()],
+            key=lambda x: x["date"],
+        )
+        rooms_sorted = dict(sorted(rooms.items(), key=lambda x: x[1], reverse=True)[:20])
+        total_checkin = (
+            categories.get("check-in ค้างคืน", 0)
+            + categories.get("check-in ชั่วคราว", 0)
+            + categories.get("check-in", 0)
+        )
+        return {
+            "daily": daily_list,
+            "hourly": hourly,
+            "categories": categories,
+            "rooms": rooms_sorted,
+            "summary": {
+                "total_checkin": total_checkin,
+                "total_checkout": categories.get("check-out", 0),
+                "total_room_ready": categories.get("ห้องพร้อม", 0),
+                "total_messages": sum(v["total"] for v in daily.values()),
+            },
+        }
+
     def get_today_summary(self) -> str:
         if not self.all_ws:
             return "❌ เชื่อมต่อ Sheets ไม่ได้"
