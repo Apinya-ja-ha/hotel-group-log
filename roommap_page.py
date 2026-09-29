@@ -53,6 +53,9 @@ h1{font-size:1.05rem;font-weight:700;margin:0 0 12px;letter-spacing:.02em}
 .controls input[type=date]{background:var(--surface);border:1px solid var(--border);color:var(--fg);padding:6px 9px;border-radius:6px;font:500 .83rem 'Sarabun',sans-serif}
 .btn{background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;font:600 .83rem 'Sarabun',sans-serif;cursor:pointer}
 .badge{font-size:.68rem;background:var(--surface2);color:var(--fg2);padding:3px 8px;border-radius:20px;border:1px solid var(--border)}
+.quick-btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.qbtn{background:var(--surface2);color:var(--fg2);border:1px solid var(--border);padding:5px 12px;border-radius:20px;font:500 .78rem 'Sarabun',sans-serif;cursor:pointer;transition:background .1s,color .1s}
+.qbtn:hover,.qbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
 .kpi{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
 .kpi .n{font:700 1.7rem/1 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
@@ -121,6 +124,12 @@ h1{font-size:1.05rem;font-weight:700;margin:0 0 12px;letter-spacing:.02em}
 <body>
 <h1>🏨 บ้านเพื่อนรีสอร์ท — แผนที่ห้องพัก</h1>
 
+<div class="quick-btns">
+  <button class="qbtn" onclick="setRange(1)">วันนี้</button>
+  <button class="qbtn" id="q7" onclick="setRange(7)">7 วัน</button>
+  <button class="qbtn" onclick="setRange(14)">14 วัน</button>
+  <button class="qbtn" onclick="setRange(30)">30 วัน</button>
+</div>
 <div class="controls">
   <input type="date" id="s">
   <span style="color:var(--fg2)">–</span>
@@ -136,17 +145,18 @@ h1{font-size:1.05rem;font-weight:700;margin:0 0 12px;letter-spacing:.02em}
 </div>
 
 <div class="legend">
-  <span>กิจกรรม/ห้อง:</span>
-  <span class="ls"><span class="lsw" style="background:var(--h0-bg);border:1px solid var(--border)"></span>ว่าง</span>
-  <span class="ls"><span class="lsw" style="background:var(--h1-fg)"></span>1–5</span>
-  <span class="ls"><span class="lsw" style="background:var(--h2-fg)"></span>6–12</span>
-  <span class="ls"><span class="lsw" style="background:var(--h3-fg)"></span>13–20</span>
-  <span class="ls"><span class="lsw" style="background:var(--h4-fg)"></span>21+</span>
-  <span style="margin-left:6px;display:flex;gap:6px;flex-wrap:wrap">
-    <span style="outline:2px dashed #f5a623;padding:1px 5px;border-radius:3px;font-size:.66rem">ย้ายออก</span>
-    <span style="outline:2px dashed #34c066;padding:1px 5px;border-radius:3px;font-size:.66rem">ย้ายเข้า</span>
-    <span style="font-size:.66rem;color:var(--fg2)">🔧 มีซ่อม</span>
-  </span>
+  <span style="font-weight:600;margin-right:2px">จำนวน check-in ในช่วงที่เลือก:</span>
+  <span class="ls"><span class="lsw" style="background:var(--h0-bg);border:1px solid var(--border)"></span>0 (ไม่ถูกใช้)</span>
+  <span class="ls"><span class="lsw" style="background:var(--h1-fg)"></span>1–5 ครั้ง</span>
+  <span class="ls"><span class="lsw" style="background:var(--h2-fg)"></span>6–12 ครั้ง</span>
+  <span class="ls"><span class="lsw" style="background:var(--h3-fg)"></span>13–20 ครั้ง</span>
+  <span class="ls"><span class="lsw" style="background:var(--h4-fg)"></span>21+ ครั้ง</span>
+</div>
+<div class="legend" style="margin-top:-6px">
+  <span style="font-weight:600;margin-right:2px">เส้นขอบ:</span>
+  <span style="outline:2px dashed #f5a623;padding:1px 6px;border-radius:3px;font-size:.72rem">ย้ายออก</span>
+  <span style="outline:2px dashed #34c066;padding:1px 6px;border-radius:3px;font-size:.72rem">ย้ายเข้า</span>
+  <span style="font-size:.72rem;color:var(--fg2)">🔧 มีซ่อมบำรุง (ตัวเลขในห้อง = ค้างคืน + ชั่วคราว รวม)</span>
 </div>
 
 <!-- Building -->
@@ -341,10 +351,21 @@ async function load(){
   }catch(err){st.textContent='Error: '+err.message;}
 }
 
+function setRange(days){
+  const e=new Date(),s=new Date();
+  if(days>1)s.setDate(s.getDate()-(days-1));
+  document.getElementById('e').value=e.toISOString().slice(0,10);
+  document.getElementById('s').value=s.toISOString().slice(0,10);
+  document.querySelectorAll('.qbtn').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  load();
+}
+
 function initDates(){
   const e=new Date(),s=new Date();s.setDate(s.getDate()-6);
   document.getElementById('e').value=e.toISOString().slice(0,10);
   document.getElementById('s').value=s.toISOString().slice(0,10);
+  document.getElementById('q7').classList.add('active');
 }
 
 initDates();load();
