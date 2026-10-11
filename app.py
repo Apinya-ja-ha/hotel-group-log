@@ -290,7 +290,7 @@ def handle_image(event):
         description = hotel_service.ocr_image(image_bytes)
     except Exception:
         description = ""
-    category = hotel_service.classify(description, "image")
+    category = "มิเตอร์น้ำ" if description.startswith("[มิเตอร์น้ำ]") else "รูปภาพ"
     hotel_service.log_message(user_id, display_name, "image", "📷 รูปภาพ", False, description, category)
 
 

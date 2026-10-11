@@ -167,7 +167,7 @@ async function load(){
         </tr>`).join('')+
         '</tbody></table>';
     }else{
-      wrap.innerHTML='<div class="empty">ยังไม่มีบันทึกมิเตอร์น้ำ — พิมพ์ "มิเตอร์ XXXX" ในกลุ่ม LINE</div>';
+      wrap.innerHTML='<div class="empty">ยังไม่มีบันทึกมิเตอร์น้ำในช่วงนี้ — ถ่ายรูปมาตรน้ำส่งในกลุ่ม LINE ระบบจะอ่านเลขให้อัตโนมัติ</div>';
     }
     st.textContent='';
   }catch(err){st.textContent='Error: '+err.message;}
