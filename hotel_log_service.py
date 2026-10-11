@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import base64
 import gspread
@@ -8,6 +9,7 @@ import pytz
 import anthropic
 
 TZ = pytz.timezone("Asia/Bangkok")
+ROOM_NUM_RE = re.compile(r'(?<!\d)(1[0-2]\d)(?!\d)')
 SCOPES = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive",
@@ -73,7 +75,7 @@ class HotelLogService:
             return "check-in ค้างคืน"
         if "ชั่วคราว" in t:
             return "check-in ชั่วคราว"
-        if any(w in t for w in ["check in", "checkin", "เช็คอิน"]):
+        if any(w in t for w in ["heck in", "checkin", "เช็คอิน"]):
             return "check-in"
         if any(w in t for w in ["ซ่อม", "ซ่อมแซม", "บำรุง"]) or ("เปลี่ยน" in t and "ห้อง" in t):
             return "ซ่อมบำรุง"
@@ -202,8 +204,6 @@ class HotelLogService:
 
     def get_dashboard_data(self, start_date: str, end_date: str) -> dict:
         """Aggregate data for dashboard. start/end = 'YYYY-MM-DD' Bangkok time."""
-        import re as _re
-        ROOM_RE = _re.compile(r'(?:ห้อง\s*)?(\b\d{3}\b)')
         if not self.all_ws:
             return {}
         try:
@@ -250,9 +250,7 @@ class HotelLogService:
             if cat:
                 categories[cat] = categories.get(cat, 0) + 1
 
-            m = ROOM_RE.search(f"{content} {desc}")
-            if m:
-                room = m.group(1)
+            for room in ROOM_NUM_RE.findall(f"{content} {desc}"):
                 rooms[room] = rooms.get(room, 0) + 1
 
         daily_list = sorted(
@@ -357,9 +355,7 @@ class HotelLogService:
 
     def get_roommap_data(self, start_date: str, end_date: str) -> dict:
         """Return per-room activity, maintenance, transfers, and financial estimates."""
-        import re as _re
-        ROOM_RE = _re.compile(r'ห้อง\s*(\d{3})')
-        XFER_RE = _re.compile(r'ห้อง\s*(\d{3}).{0,20}(?:ย้ายไป|ไป|→)\s*ห้อง\s*(\d{3})')
+        XFER_RE = re.compile(r'(?<!\d)(1[0-2]\d)(?!\d).{0,20}(?:ย้ายไป|ไป|→)\s*(?:ห้อง\s*)?(1[0-2]\d)(?!\d)')
         if not self.all_ws:
             return {}
         try:
@@ -394,10 +390,7 @@ class HotelLogService:
             date_str = ts.strftime("%d/%m")
             time_str = ts.strftime("%H:%M")
 
-            m = ROOM_RE.search(text)
-            room = m.group(1) if m else None
-
-            if room:
+            for room in dict.fromkeys(ROOM_NUM_RE.findall(text)):
                 if room not in rooms:
                     rooms[room] = {"ov": 0, "tp": 0, "rd": 0, "co": 0}
                 if cat == "check-in ค้างคืน":
@@ -411,9 +404,7 @@ class HotelLogService:
                 elif cat == "check-out":
                     rooms[room]["co"] += 1
                 elif cat == "ซ่อมบำรุง":
-                    if room not in maint:
-                        maint[room] = []
-                    maint[room].append({"date": date_str, "note": content[:80]})
+                    maint.setdefault(room, []).append({"date": date_str, "note": content[:80]})
 
             if cat == "ย้ายห้อง":
                 xm = XFER_RE.search(text)
