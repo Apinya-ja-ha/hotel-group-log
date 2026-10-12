@@ -159,6 +159,16 @@ def api_water():
     return data
 
 
+@app.route("/admin/backfill-water/<secret>")
+def backfill_water(secret):
+    if not CRON_SECRET or secret != CRON_SECRET:
+        abort(403)
+    start = request.args.get("start", "2026-09-30")
+    end = request.args.get("end", datetime.now(TZ).strftime("%Y-%m-%d"))
+    apply = request.args.get("apply") == "1"
+    return hotel_service.backfill_water_photos(start, end, apply)
+
+
 @app.route("/roommap")
 def roommap():
     key = request.args.get("key", "")

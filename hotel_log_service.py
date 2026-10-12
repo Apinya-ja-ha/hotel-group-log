@@ -353,6 +353,40 @@ class HotelLogService:
             },
         }
 
+    def backfill_water_photos(self, start_date: str, end_date: str, apply: bool) -> dict:
+        """Find old image rows whose OCR text looks like a meter reading; tag them when apply=True."""
+        NUM_RE = re.compile(r'(?<!\d)(\d{4,7}(?:[.,]\d+)?)(?!\d)')
+        BILL_WORDS = ["บิล", "ใบเสร็จ", "รวม", "บาท", "ยอด", "total", "ค่า", "tel", "โทร"]
+        if not self.all_ws:
+            return {"error": "no sheet"}
+        start = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=TZ)
+        end = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=TZ) + timedelta(days=1)
+        all_rows = self.all_ws.get_all_values()
+        candidates = []
+        for idx, r in enumerate(all_rows[1:], start=2):
+            if len(r) < 8 or not r[0] or r[3] != "image" or r[7] == "มิเตอร์น้ำ":
+                continue
+            try:
+                ts = datetime.strptime(r[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=TZ)
+            except ValueError:
+                continue
+            if ts < start or ts >= end:
+                continue
+            desc = r[6]
+            if any(w in desc.lower() for w in BILL_WORDS):
+                continue
+            nums = NUM_RE.findall(desc)
+            if not nums:
+                continue
+            candidates.append({
+                "row": idx, "ts": r[0], "value": max(float(n.replace(",", ".")) for n in nums),
+                "desc": desc[:80],
+            })
+        if apply:
+            for c in candidates:
+                self.all_ws.update_cell(c["row"], 8, "มิเตอร์น้ำ")
+        return {"applied": apply, "count": len(candidates), "candidates": candidates}
+
     def get_roommap_data(self, start_date: str, end_date: str) -> dict:
         """Return per-room activity, maintenance, transfers, and financial estimates."""
         XFER_RE = re.compile(r'(?<!\d)(1[0-2]\d)(?!\d).{0,20}(?:ย้ายไป|ไป|→)\s*(?:ห้อง\s*)?(1[0-2]\d)(?!\d)')
